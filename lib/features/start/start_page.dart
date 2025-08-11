@@ -1,3 +1,4 @@
+// lib/features/start/start_page.dart
 import 'package:flutter/material.dart';
 import '../legal/terms_page.dart';
 import '../legal/privacy_page.dart';
@@ -8,6 +9,8 @@ class StartPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -22,22 +25,28 @@ class StartPage extends StatelessWidget {
               const SizedBox(height: 8),
               const Text('顔×性格でわかる16タイプ診断', textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              // 画像送信の注意書き
+
+              // 画像送信の注意書き（テーマのprimaryを薄く）
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 10,
+                  vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.08),
+                  color: cs.primary.withOpacity(0.10),
+                  border: Border.all(color: cs.primary.withOpacity(0.20)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  'この診断では、選択した顔写真がサーバーに送信されます。\n詳細は「利用規約」と「プライバシーポリシー」をご確認ください。',
+                  'この診断では、選択した顔写真がサーバーに送信されます。\n'
+                  '詳細は「利用規約」と「プライバシーポリシー」をご確認ください。',
                   textAlign: TextAlign.center,
                 ),
               ),
+
               const Spacer(),
+
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
@@ -47,7 +56,8 @@ class StartPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              // 規約リンク行
+
+              // 規約リンク
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

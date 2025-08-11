@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/app_routes.dart';
+import 'core/app_theme.dart';
 import 'features/start/start_page.dart';
 import 'features/upload/upload_page.dart';
 import 'features/questions/questions_page.dart';
@@ -25,10 +26,9 @@ class MyApp extends StatelessWidget {
         AppRoutes.questions: (_) => const QuestionsPage(),
         AppRoutes.result: (_) => const ResultPage(),
       },
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
-      ),
+      theme: buildKaotypeTheme(Brightness.light), // ← 共通テーマ（ライト）
+      darkTheme: buildKaotypeTheme(Brightness.dark), // ← 共通テーマ（ダーク）
+      themeMode: ThemeMode.light, // 必要なら ThemeMode.system に変更可
     );
   }
 }

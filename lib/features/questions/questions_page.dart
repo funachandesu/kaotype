@@ -110,6 +110,7 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final total = questions.length;
     final q = questions[index];
 
@@ -118,28 +119,98 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
         title: Text('${index + 1}/$total'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: goPrev, // ← 戻る専用に修正
+          onPressed: goPrev, // 戻る
         ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            LinearProgressIndicator(value: (index + 1) / total),
+            // プログレスバー（テーマカラー）
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: (index + 1) / total,
+                color: cs.primary,
+                backgroundColor: cs.primary.withOpacity(0.15),
+                minHeight: 8,
+              ),
+            ),
             const SizedBox(height: 16),
-            Text(q['text'] as String, style: const TextStyle(fontSize: 18)),
-            const SizedBox(height: 16),
-            ...(q['options'] as List<String>).asMap().entries.map((entry) {
-              final optIndex = entry.key;
-              final optText = entry.value;
-              return RadioListTile<int>(
-                value: optIndex,
-                groupValue: selected,
-                onChanged: (val) => setState(() => selected = val),
-                title: Text(optText),
-              );
-            }),
+
+            // 質問カード
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cs.primary.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.primary.withOpacity(0.15)),
+              ),
+              child: Text(
+                q['text'] as String,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ラジオの色をテーマに合わせる
+            RadioTheme(
+              data: RadioThemeData(
+                fillColor: WidgetStateProperty.resolveWith(
+                  (states) => cs.primary,
+                ),
+              ),
+              child: ListTileTheme(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 0),
+                child: Column(
+                  children: (q['options'] as List<String>).asMap().entries.map((
+                    entry,
+                  ) {
+                    final optIndex = entry.key;
+                    final optText = entry.value;
+                    final isSelected = selected == optIndex;
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? cs.primary
+                              : cs.primary.withOpacity(0.12),
+                        ),
+                        color: isSelected
+                            ? cs.primary.withOpacity(0.08)
+                            : Colors.transparent,
+                      ),
+                      child: RadioListTile<int>(
+                        value: optIndex,
+                        groupValue: selected,
+                        onChanged: (val) => setState(() => selected = val),
+                        title: Text(optText),
+                        // Material3での見た目を詰める
+                        controlAffinity: ListTileControlAffinity.trailing,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+
             const Spacer(),
+
+            // 次へ / 結果へ
             SizedBox(
               width: double.infinity,
               child: FilledButton(
