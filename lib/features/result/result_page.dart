@@ -16,7 +16,7 @@ import '../../state/app_state.dart';
 final apiClientProvider = Provider<ApiClient>((ref) {
   final useMock = ref.watch(useMockProvider);
   return ApiClient(
-    baseUrl: 'kaotype-api.nakayoshitalk.workers.dev',
+    baseUrl: 'https://kaotype-api.nakayoshitalk.workers.dev',
     useMock: useMock,
   );
 });
