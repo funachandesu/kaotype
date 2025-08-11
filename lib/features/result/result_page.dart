@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -34,12 +35,10 @@ class _ResultPageState extends ConsumerState<ResultPage> {
   final GlobalKey _captureKey = GlobalKey();
 
   Future<void> fetchResult() async {
-    // パスとバイト列の両方を参照
     final localFrontPath = ref.read(selectedImagePathProvider);
     final localSidePath = ref.read(selectedSideImagePathProvider);
     final frontBytes = ref.read(selectedImageBytesProvider);
     final sideBytes = ref.read(selectedSideImageBytesProvider);
-
     final answersMap = ref.read(answersProvider);
 
     if ((frontBytes == null && localFrontPath == null) || answersMap.isEmpty) {
@@ -98,9 +97,7 @@ class _ResultPageState extends ConsumerState<ResultPage> {
     } catch (e) {
       setState(() => error = 'エラー: $e');
     } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -155,35 +152,48 @@ class _ResultPageState extends ConsumerState<ResultPage> {
             ? Center(child: Text(error!))
             : res == null
             ? const Center(child: Text('結果がありません'))
-            : Column(
-                children: [
-                  RepaintBoundary(
-                    key: _captureKey,
-                    child: _ResultCard(res: res),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      if (!kIsWeb)
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () => _shareCapture(targetLabel: 'LINE'),
-                            icon: const Icon(Icons.send),
-                            label: const Text('結果を共有する'),
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  // スクロール可能 + 画面高に合わせて最小高確保
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight - 16,
+                      ),
+                      child: Column(
+                        children: [
+                          RepaintBoundary(
+                            key: _captureKey,
+                            child: _ResultCard(res: res),
                           ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () =>
-                          Navigator.popUntil(context, (r) => r.isFirst),
-                      child: const Text('もう一度診断する'),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              if (!kIsWeb)
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: () =>
+                                        _shareCapture(targetLabel: 'LINE'),
+                                    icon: const Icon(Icons.send),
+                                    label: const Text('結果を共有する'),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () =>
+                                  Navigator.popUntil(context, (r) => r.isFirst),
+                              child: const Text('もう一度診断する'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
       ),
     );
@@ -196,31 +206,62 @@ class _ResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Card(
       elevation: 0,
-      color: Theme.of(context).colorScheme.surface,
+      color: cs.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Image.asset(_getImagePath(res.type), fit: BoxFit.cover),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              res.type,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            Text(res.label, style: const TextStyle(fontSize: 16)),
-            const Divider(height: 24),
-            Text(res.description),
-          ],
+        child: LayoutBuilder(
+          builder: (context, c) {
+            // 画像の最大サイズに上限を設ける（横が広いWebでも縦が足りない時にオーバーフローしない）
+            final double imageSide = math.min(
+              c.maxWidth,
+              520,
+            ); // 上限 520px（好みで調整可）
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: SizedBox(
+                    width: imageSide,
+                    child: const AspectRatio(
+                      aspectRatio: 1, // 正方形
+                      child: _ResultImage(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  res.type,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(res.label, style: const TextStyle(fontSize: 16)),
+                const Divider(height: 24),
+                Text(res.description),
+              ],
+            );
+          },
         ),
       ),
     );
+  }
+}
+
+/// Image.asset のラッパ。将来差し替えやローディング調整があればここで。
+class _ResultImage extends StatelessWidget {
+  const _ResultImage();
+
+  @override
+  Widget build(BuildContext context) {
+    final res = (context.findAncestorWidgetOfExactType<_ResultCard>())!.res;
+    return Image.asset(_getImagePath(res.type), fit: BoxFit.cover);
   }
 }
 
