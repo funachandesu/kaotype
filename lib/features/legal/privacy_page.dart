@@ -89,7 +89,7 @@ class _PrivacyBody extends StatelessWidget {
 
         Text('8. 連絡先', style: h),
         const SizedBox(height: 8),
-        Text('お問い合わせ：info@example.com（仮）', style: p),
+        Text('お問い合わせ：info@kao-type.com', style: p),
         const SizedBox(height: 32),
         Text('制定日：2025年8月11日', style: p),
       ],
