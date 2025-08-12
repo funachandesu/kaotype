@@ -176,6 +176,12 @@
       "languageVersion": "3.7"
     },
     {
+      "name": "google_fonts",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/google_fonts-6.3.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.14"
+    },
+    {
       "name": "http",
       "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/http-1.5.0",
       "packageUri": "lib/",

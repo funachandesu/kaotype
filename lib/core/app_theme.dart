@@ -1,8 +1,8 @@
 // lib/core/app_theme.dart
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// 16Pっぽい緑ベース + 補色（紫）
-/// スクショから抽出した近似色
 class KaotypeColors {
   static const Color greenMain = Color(0xFF127158); // 濃緑（主）
   static const Color greenLight = Color(0xFF46C5A1); // 明るいアクセント
@@ -15,7 +15,7 @@ class KaotypeColors {
 ThemeData buildKaotypeTheme(Brightness brightness) {
   final isDark = brightness == Brightness.dark;
 
-  // ColorScheme を直接定義（Seedではなく手動で揃える）
+  // 手動 ColorScheme
   final scheme = ColorScheme(
     brightness: brightness,
     primary: KaotypeColors.greenMain,
@@ -34,13 +34,22 @@ ThemeData buildKaotypeTheme(Brightness brightness) {
     onError: Colors.white,
     surface: isDark ? const Color(0xFF121212) : Colors.white,
     onSurface: isDark ? Colors.white : const Color(0xFF212121),
-    surfaceContainerHighest: KaotypeColors.grayBg, // Flutter 3.22+のみ使用
+    surfaceContainerHighest: KaotypeColors.grayBg, // 3.22+のみ使用
     outline: Colors.black12,
   );
 
+  // ★ Noto Sans JP を採用（色も適用）、fontFamily も明示
+  final jpTextTheme = GoogleFonts.notoSansJpTextTheme().apply(
+    bodyColor: scheme.onSurface,
+    displayColor: scheme.onSurface,
+  );
+  final fontFamily = GoogleFonts.notoSansJp().fontFamily;
+
   return ThemeData(
-    colorScheme: scheme,
     useMaterial3: true,
+    colorScheme: scheme,
+    textTheme: jpTextTheme,
+    fontFamily: fontFamily,
     scaffoldBackgroundColor: isDark
         ? const Color(0xFF101314)
         : const Color(0xFFF7FAF8),
@@ -48,9 +57,6 @@ ThemeData buildKaotypeTheme(Brightness brightness) {
       backgroundColor: scheme.surface,
       foregroundColor: scheme.onSurface,
       elevation: 0,
-    ),
-    textTheme: const TextTheme(
-      titleLarge: TextStyle(fontWeight: FontWeight.bold),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
