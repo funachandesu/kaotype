@@ -55,6 +55,18 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
     },
   ];
 
+  // 各質問ごとの絵文字（アイコン代わり）
+  static const Map<String, List<String>> optionEmojis = {
+    'q1': ['😄', '👀', '⚖️', '💇'],
+    'q2': ['🖌️', '✏️', '⬆️', '⬇️'],
+    'q3': ['😊', '😌', '😤', '😐'],
+    'q4': ['😁', '🙂', '😶', '🤪'],
+    'q5': ['⚡', '🌤️', '🧘', '🎭'],
+    'q6': ['📅', '🚶', '🏠', '🎧'],
+    'q7': ['🚀', '🤝', '📊', '📋'],
+    'q8': ['☀️', '🌿', '❄️', '🕶️'],
+  };
+
   int index = 0;
   int? selected; // 0~3（配列index）
 
@@ -108,117 +120,269 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
     });
   }
 
+  Color _accent(ColorScheme cs, int i) {
+    if (i == 0) return cs.primary;
+    if (i == 1) return cs.secondary;
+    if (i == 2) return cs.tertiary;
+    return Colors.teal; // フォールバック
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final total = questions.length;
     final q = questions[index];
+    final emojis = optionEmojis[q['id']] ?? const ['✨', '✨', '✨', '✨'];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${index + 1}/$total'),
+        title: Text('Q${index + 1} / $total'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: goPrev, // 戻る
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // プログレスバー（テーマカラー）
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: (index + 1) / total,
-                color: cs.primary,
-                backgroundColor: cs.primary.withOpacity(0.15),
-                minHeight: 8,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 質問カード
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: cs.primary.withOpacity(0.15)),
-              ),
-              child: Text(
-                q['text'] as String,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            children: [
+              // プログレスバー（テーマカラー）
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: (index + 1) / total,
+                  color: cs.primary,
+                  backgroundColor: cs.primary.withOpacity(0.15),
+                  minHeight: 8,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
-            // ラジオの色をテーマに合わせる
-            RadioTheme(
-              data: RadioThemeData(
-                fillColor: WidgetStateProperty.resolveWith(
-                  (states) => cs.primary,
+              // 質問カード（没入感の入口）
+              _QuestionCard(text: q['text'] as String),
+
+              const SizedBox(height: 12),
+
+              // 選択肢：カード型 + アイコン + 色
+              Expanded(
+                child: _OptionsGrid(
+                  options: (q['options'] as List<String>),
+                  emojis: emojis,
+                  selected: selected,
+                  onSelect: (i) => setState(() => selected = i),
+                  colorFor: (i) => _accent(cs, i),
                 ),
               ),
-              child: ListTileTheme(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 0),
-                child: Column(
-                  children: (q['options'] as List<String>).asMap().entries.map((
-                    entry,
-                  ) {
-                    final optIndex = entry.key;
-                    final optText = entry.value;
-                    final isSelected = selected == optIndex;
 
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? cs.primary
-                              : cs.primary.withOpacity(0.12),
-                        ),
-                        color: isSelected
-                            ? cs.primary.withOpacity(0.08)
-                            : Colors.transparent,
-                      ),
-                      child: RadioListTile<int>(
-                        value: optIndex,
-                        groupValue: selected,
-                        onChanged: (val) => setState(() => selected = val),
-                        title: Text(optText),
-                        // Material3での見た目を詰める
-                        controlAffinity: ListTileControlAffinity.trailing,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+              // 次へ / 結果へ
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: selected == null ? null : goNext,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(index == total - 1 ? '結果を見る' : '次へ'),
+                  ),
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-            const Spacer(),
+/// =========================
+/// 質問テキストのカード
+/// =========================
+class _QuestionCard extends StatelessWidget {
+  const _QuestionCard({required this.text});
+  final String text;
 
-            // 次へ / 結果へ
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: selected == null ? null : goNext,
-                child: Text(index == total - 1 ? '結果を見る' : '次へ'),
-              ),
-            ),
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: const Alignment(-1, -1),
+          end: const Alignment(1, 1),
+          colors: [
+            cs.primary.withOpacity(0.10),
+            cs.secondary.withOpacity(0.08),
           ],
+        ),
+        border: Border.all(color: Colors.white.withOpacity(0.6)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.quiz_rounded, color: cs.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// =========================
+/// オプショングリッド（1〜2列）
+/// =========================
+class _OptionsGrid extends StatelessWidget {
+  const _OptionsGrid({
+    required this.options,
+    required this.emojis,
+    required this.selected,
+    required this.onSelect,
+    required this.colorFor,
+  });
+
+  final List<String> options;
+  final List<String> emojis;
+  final int? selected;
+  final ValueChanged<int> onSelect;
+  final Color Function(int) colorFor;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        final isNarrow = w < 360;
+        final crossAxisCount = isNarrow ? 1 : 2;
+
+        return GridView.builder(
+          padding: const EdgeInsets.only(top: 2, bottom: 8),
+          itemCount: options.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            mainAxisExtent: 96, // 高さ固定で安定
+          ),
+          itemBuilder: (context, i) {
+            final isSel = selected == i;
+            return _OptionCard(
+              label: options[i],
+              emoji: emojis[i % emojis.length],
+              accent: colorFor(i),
+              selected: isSel,
+              onTap: () => onSelect(i),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// =========================
+/// 単一のオプションカード
+/// =========================
+class _OptionCard extends StatelessWidget {
+  const _OptionCard({
+    required this.label,
+    required this.emoji,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String emoji;
+  final Color accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final baseGrad = [accent.withOpacity(0.10), accent.withOpacity(0.06)];
+
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 120),
+      scale: selected ? 1.02 : 1.0,
+      curve: Curves.easeOut,
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: const Alignment(-1, -1),
+              end: const Alignment(1, 1),
+              colors: selected
+                  ? [accent.withOpacity(0.18), accent.withOpacity(0.10)]
+                  : baseGrad,
+            ),
+            border: Border.all(
+              color: selected ? accent : Colors.white.withOpacity(0.6),
+              width: selected ? 1.6 : 1.0,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: accent.withOpacity(0.18),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  // ラベル
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  // チェック
+                  AnimatedOpacity(
+                    opacity: selected ? 1 : 0.0,
+                    duration: const Duration(milliseconds: 120),
+                    child: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: accent,
+                      child: const Icon(
+                        Icons.check,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
