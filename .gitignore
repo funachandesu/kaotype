@@ -1,0 +1,94 @@
+# ─── Dart / Flutter ────────────────────────────────────────────────────────────
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.fvm/                # FVM を使っている場合
+.melos_tool/         # Melos を使っている場合
+
+# ビルド成果物
+build/
+**/build/
+
+# 一時・テスト
+coverage/
+.dart_tool/pub/
+*.log
+
+# ─── IDE / エディタ ───────────────────────────────────────────────────────────
+# VS Code
+.vscode/
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# ─── Android ──────────────────────────────────────────────────────────────────
+android/.gradle/
+android/**/local.properties
+android/**/captures/
+android/**/generated/
+android/app/*.jks
+android/app/*.keystore
+android/key.properties
+android/app/src/main/assets/crashlytics-build.properties
+
+# Gradle キャッシュ
+**/.gradle/
+**/gradle/wrapper/gradle-wrapper.properties~   # 一時バックアップ
+
+# ─── iOS / macOS (Xcode / CocoaPods) ─────────────────────────────────────────
+# CocoaPods（Podfile.lock はコミット推奨）
+ios/Pods/
+macos/Pods/
+
+# Flutter エフェメラル
+ios/Flutter/.last_build_id
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+macos/Flutter/ephemeral/
+
+# Xcode 派生ファイル
+**/DerivedData/
+**/*.xcuserstate
+**/*.xccheckout
+**/*.moved-aside
+**/*.xcworkspace/xcuserdata/
+**/*.xcodeproj/project.xcworkspace/xcuserdata/
+**/*.xcscmblueprint
+
+# ─── Windows / Linux / Web ───────────────────────────────────────────────────
+# Windows (CMake の中間物)
+windows/flutter/ephemeral/
+windows/**/CMakeFiles/
+windows/**/cmake-build-*/
+
+# Linux (CMake の中間物)
+linux/flutter/ephemeral/
+linux/**/CMakeFiles/
+linux/**/cmake-build-*/
+
+# Web
+# （build/ は上で無視済み。PWA のキャッシュ生成物はビルド配下に出るためOK）
+
+# ─── Fastlane / 配布補助 ─────────────────────────────────────────────────────
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# ─── 環境変数 / 秘密情報（必要に応じて使用） ───────────────────────────────
+.env
+*.env
+# Firebase をリポジトリに含めたくない場合は以下をアンコメント
+# android/app/google-services.json
+# ios/Runner/GoogleService-Info.plist
+
+# ─── その他オプション ─────────────────────────────────────────────────────
+# VSCode 拡張の履歴など
+.history/
