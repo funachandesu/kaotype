@@ -1,5 +1,6 @@
 // lib/features/result/result_page.dart
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
@@ -7,6 +8,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -32,11 +34,42 @@ class _ResultPageState extends ConsumerState<ResultPage> {
   bool loading = false;
   String? error;
 
+  // JSONデータ
+  Map<String, dynamic>? _typeDb;
+  bool _dbLoading = true;
+  String? _dbError;
+
   final GlobalKey _captureKey = GlobalKey();
 
   // 演出用
   int _countdown = 0; // 0で非表示、3→2→1→0
   bool _blast = false; // 決定時のきらめき
+
+  Future<void> _loadTypeDb() async {
+    setState(() {
+      _dbLoading = true;
+      _dbError = null;
+    });
+    try {
+      // 同ディレクトリに配置したJSONを読み込む
+      // pubspec.yaml の assets にこのパスを追加しておくこと
+      final jsonStr = await rootBundle.loadString(
+        'lib/features/result/result_definitions.json',
+      );
+      final decoded = json.decode(jsonStr) as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _typeDb = decoded;
+        _dbLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dbError = '結果データの読み込みに失敗しました: $e';
+        _dbLoading = false;
+      });
+    }
+  }
 
   Future<void> fetchResult() async {
     final localFrontPath = ref.read(selectedImagePathProvider);
@@ -130,7 +163,10 @@ class _ResultPageState extends ConsumerState<ResultPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => fetchResult());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTypeDb();
+      fetchResult();
+    });
   }
 
   Future<void> _shareCapture({required String targetLabel}) async {
@@ -171,16 +207,20 @@ class _ResultPageState extends ConsumerState<ResultPage> {
     final res = ref.watch(analyzeResultProvider);
     final cs = Theme.of(context).colorScheme;
 
+    final isBusy = loading || _dbLoading;
+
     return Scaffold(
       appBar: AppBar(title: const Text('診断結果')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: loading
+        child: isBusy
             ? const Center(child: CircularProgressIndicator())
-            : error != null
-            ? Center(child: Text(error!))
+            : (error ?? _dbError) != null
+            ? Center(child: Text((error ?? _dbError)!))
             : res == null
             ? const Center(child: Text('結果がありません'))
+            : (_typeDb?[res.type] == null)
+            ? Center(child: Text('結果データに ${res.type} の定義が見つかりませんでした'))
             : LayoutBuilder(
                 builder: (context, constraints) {
                   final content = SingleChildScrollView(
@@ -193,11 +233,14 @@ class _ResultPageState extends ConsumerState<ResultPage> {
                           // ===== 共有用キャプチャ領域 =====
                           RepaintBoundary(
                             key: _captureKey,
-                            child: _ResultCard(res: res),
+                            child: _ResultCard(
+                              typeCode: res.type,
+                              data: _typeDb![res.type] as Map<String, dynamic>,
+                            ),
                           ),
                           const SizedBox(height: 16),
 
-                          // ===== SNSシェア導線（目立つ） =====
+                          // ===== SNSシェア導線 =====
                           Row(
                             children: [
                               if (!kIsWeb)
@@ -255,11 +298,12 @@ class _ResultPageState extends ConsumerState<ResultPage> {
 }
 
 /// =====================================================
-/// 結果カード（スクショ映え）
+/// 結果カード（JSON 準拠UI）
 /// =====================================================
 class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.res});
-  final AnalyzeResult res;
+  const _ResultCard({required this.typeCode, required this.data});
+  final String typeCode;
+  final Map<String, dynamic> data;
 
   Color _accentFromType(ColorScheme cs, String t) {
     final ch = (t.isNotEmpty ? t[0] : 'S').toUpperCase();
@@ -273,69 +317,66 @@ class _ResultCard extends StatelessWidget {
     }
   }
 
-  String _flipType(String type) {
-    const map = {
-      'S': 'K',
-      'K': 'S',
-      'M': 'P',
-      'P': 'M',
-      'H': 'L',
-      'L': 'H',
-      'A': 'C',
-      'C': 'A',
-    };
-    final up = type.toUpperCase();
-    return up.split('').map((c) => map[c] ?? c).join();
-  }
-
-  Map<String, double> _axisScores(String type) {
-    // S/K, M/P, H/L, A/C の4軸。タイプ文字で 78/22 の強弱をつける。
-    final up = type.toUpperCase().padRight(4, 'A');
-    double v(String left, String right, int i) =>
-        up[i] == left ? 0.78 : (up[i] == right ? 0.22 : 0.50);
-    return {
-      'S↔K': v('S', 'K', 0),
-      'M↔P': v('M', 'P', 1),
-      'H↔L': v('H', 'L', 2),
-      'A↔C': v('A', 'C', 3),
-    };
-  }
-
-  List<String> _strengths(String type) {
-    // シンプルな擬似割当（スクショ用の見栄え重視）
-    final up = type.toUpperCase();
-    return [
-      if (up.contains('S')) '親しみやすさ',
-      if (up.contains('K')) 'クールな安定感',
-      if (up.contains('M')) '瞬発力・ノリ',
-      if (up.contains('P')) '丁寧さ・配慮',
-      if (up.contains('H')) '存在感・メリハリ',
-      if (up.contains('L')) '落ち着き',
-      if (up.contains('A')) '行動力',
-      if (up.contains('C')) '計画性',
-    ];
-  }
-
-  List<String> _weakness(String type) {
-    final up = type.toUpperCase();
-    return [
-      if (up.contains('S')) '優柔不断になりがち',
-      if (up.contains('K')) '感情が伝わりにくい',
-      if (up.contains('M')) 'その場の勢いで動く',
-      if (up.contains('P')) '決断が遅れることも',
-      if (up.contains('H')) '強めに見られがち',
-      if (up.contains('L')) '地味見えすることも',
-      if (up.contains('A')) '突っ走りがち',
-      if (up.contains('C')) '柔軟性に欠けることも',
-    ];
+  double _toPct(dynamic v) {
+    if (v == null) return 0.0;
+    double d;
+    if (v is int) {
+      d = v.toDouble();
+    } else if (v is double) {
+      d = v;
+    } else {
+      d = double.tryParse(v.toString()) ?? 0.0;
+    }
+    // 0〜100 を想定し、ガード
+    return (d / 100.0).clamp(0.0, 1.0);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final accent = _accentFromType(cs, res.type);
-    final flipped = _flipType(res.type);
-    final scores = _axisScores(res.type);
+    final accent = _accentFromType(cs, typeCode);
+
+    final name = (data['name'] ?? '').toString();
+    final catchCopy = (data['catch_copy'] ?? '').toString();
+    final catchPhrase = (data['catch_phrase'] ?? '').toString();
+    final manual = (data['manual'] ?? '').toString();
+
+    final strongPoints = (data['strong_point'] as List<dynamic>? ?? [])
+        .map((e) => e.toString())
+        .toList();
+    final weekPoints = (data['week_point'] as List<dynamic>? ?? [])
+        .map((e) => e.toString())
+        .toList();
+
+    final advice = (data['one_point_advice'] ?? '').toString();
+
+    final chart = (data['chart'] as Map<String, dynamic>? ?? {});
+    final sk = _toPct(chart['SK']);
+    final mp = _toPct(chart['MP']);
+    final hl = _toPct(chart['HL']);
+    final ac = _toPct(chart['AC']);
+
+    final typeThings = (data['type_things'] as List<dynamic>? ?? [])
+        .map((e) => e.toString())
+        .toList();
+
+    final careers = (data['suitable_careers_and_roles'] as List<dynamic>? ?? [])
+        .map((e) => e.toString())
+        .toList();
+
+    final compatible = (data['compatible_types'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .cast<Map<String, dynamic>>()
+        .toList();
+    final incompatible = (data['incompatible_types'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .cast<Map<String, dynamic>>()
+        .toList();
+
+    final celebrities = (data['similar_famous_people'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .cast<Map<String, dynamic>>()
+        .toList();
 
     return Card(
       elevation: 0,
@@ -350,8 +391,39 @@ class _ResultCard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // タイトル帯（タイプ4文字バッジ）
-                _TypeBadge(code: res.type, label: res.label, accent: accent),
+                // タイトル帯（タイプ4文字バッジ + JSONタイトル/キャッチコピー）
+                _TypeBadge(
+                  code: typeCode,
+                  title: name,
+                  subtitle: catchCopy,
+                  accent: accent,
+                ),
+
+                const SizedBox(height: 10),
+                if (catchPhrase.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.6),
+                        ),
+                      ),
+                      child: Text(
+                        catchPhrase,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ),
 
                 const SizedBox(height: 12),
 
@@ -361,37 +433,156 @@ class _ResultCard extends StatelessWidget {
                     width: imageSide,
                     child: AspectRatio(
                       aspectRatio: 1,
-                      child: _ResultImage(type: res.type),
+                      child: _ResultImage(type: typeCode),
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 12),
 
-                // 説明（リッチ）
+                // 概要（manual）
                 _SectionHeader(title: '概要'),
                 const SizedBox(height: 6),
-                Text(res.description),
+                Text(manual),
 
                 const SizedBox(height: 16),
 
-                // 4軸チャート（バー）
+                // 4軸チャート（バー） JSONの chart をそのまま表示 + ラベル（ベタ書き）
                 _SectionHeader(title: 'タイプチャート'),
                 const SizedBox(height: 8),
-                ...scores.entries.map(
-                  (e) => _DualBar(label: e.key, valueLeft: e.value),
+
+                // S-K
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'S = 親しみやすさ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'K = クールな安定感',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 6),
+                _DualBar(label: 'S↔K', valueLeft: sk),
+
+                const SizedBox(height: 8),
+
+                // M-P
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'M = 瞬発力・ノリ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'P = 丁寧さ・配慮',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                _DualBar(label: 'M↔P', valueLeft: mp),
+
+                const SizedBox(height: 8),
+
+                // H-L
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'H = 存在感・メリハリ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'L = 落ち着き',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                _DualBar(label: 'H↔L', valueLeft: hl),
+
+                const SizedBox(height: 8),
+
+                // A-C
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'A = 行動力',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'C = 計画性',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                _DualBar(label: 'A↔C', valueLeft: ac),
 
                 const SizedBox(height: 16),
 
-                // 強み・弱み
+                // 強み・弱み（JSON 準拠）
                 Row(
                   children: [
                     Expanded(
                       child: _BulletCard(
                         title: '強み',
                         accent: accent,
-                        bullets: _strengths(res.type).take(4).toList(),
+                        bullets: strongPoints,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -399,7 +590,7 @@ class _ResultCard extends StatelessWidget {
                       child: _BulletCard(
                         title: '弱み',
                         accent: cs.error,
-                        bullets: _weakness(res.type).take(4).toList(),
+                        bullets: weekPoints,
                       ),
                     ),
                   ],
@@ -407,33 +598,95 @@ class _ResultCard extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                // アドバイス
-                _AdviceCard(
-                  accent: accent,
-                  tips: const [
-                    '写真は「光」を味方に。明るい正面＋少し斜めで雰囲気UP',
-                    '表情は口角と目のどちらかを主役にして統一感を出す',
-                    'ファッションは色数を絞ってコントラストを作ると映える',
-                  ],
-                ),
+                // アドバイス（JSON 準拠）
+                _AdviceCard(accent: accent, tips: [advice]),
 
                 const SizedBox(height: 16),
 
-                // 相性
+                // タイプあるある
+                if (typeThings.isNotEmpty) ...[
+                  _SectionHeader(title: 'タイプあるある'),
+                  const SizedBox(height: 8),
+                  _ChipWrap(items: typeThings, color: cs.primary),
+                  const SizedBox(height: 16),
+                ],
+
+                // 向いてる職業・役割
+                if (careers.isNotEmpty) ...[
+                  _SectionHeader(title: '向いてる職業・役割'),
+                  const SizedBox(height: 8),
+                  _ChipWrap(items: careers, color: cs.secondary),
+                  const SizedBox(height: 16),
+                ],
+
+                // 相性（良い／注意）理由つき
                 _SectionHeader(title: '相性'),
                 const SizedBox(height: 8),
-                _CompatibilityRow(
-                  good: [
-                    flipped,
-                    '${flipped[0]}${res.type.substring(1)}',
-                    '${res.type[0]}${flipped.substring(1)}',
-                  ],
-                  caution: [
-                    res.type,
-                    '${res.type.substring(0, 2)}${flipped.substring(2)}',
-                  ],
-                  accent: accent,
-                ),
+                if (compatible.isNotEmpty)
+                  _ReasonList(
+                    title: 'ベスト',
+                    items: compatible,
+                    pillColor: accent,
+                  ),
+                if (incompatible.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _ReasonList(
+                    title: '注意',
+                    items: incompatible,
+                    pillColor: cs.error,
+                  ),
+                ],
+
+                const SizedBox(height: 16),
+
+                // 似ている有名人
+                if (celebrities.isNotEmpty) ...[
+                  _SectionHeader(title: '似ている有名人'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: celebrities.map((m) {
+                      final name = (m['name'] ?? '').toString();
+                      final desc = (m['description'] ?? '').toString();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceVariant.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.6),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.person, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (desc.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                '($desc)',
+                                style: TextStyle(
+                                  color: cs.onSurface.withOpacity(0.65),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ],
             );
           },
@@ -443,7 +696,7 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
-/// 共有用画像
+/// JSON画像パスのマップは従来と同様
 class _ResultImage extends StatelessWidget {
   const _ResultImage({required this.type});
   final String type;
@@ -454,15 +707,17 @@ class _ResultImage extends StatelessWidget {
   }
 }
 
-/// タイプ4文字の目立つバッジ
+/// タイプ4文字の目立つバッジ（JSONの name/catch_copy を表示）
 class _TypeBadge extends StatelessWidget {
   const _TypeBadge({
     required this.code,
-    required this.label,
+    required this.title,
+    required this.subtitle,
     required this.accent,
   });
   final String code;
-  final String label;
+  final String title;
+  final String subtitle;
   final Color accent;
 
   @override
@@ -511,17 +766,19 @@ class _TypeBadge extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
+                  title,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'あなたの顔×性格タイプ',
-                  style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
-                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -559,7 +816,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// 4軸のデュアルバー
+/// 4軸のデュアルバー（左側比率を 0〜1 で受け取る）
 class _DualBar extends StatelessWidget {
   const _DualBar({required this.label, required this.valueLeft});
   final String label; // "S↔K" など
@@ -611,7 +868,7 @@ class _DualBar extends StatelessWidget {
   }
 }
 
-/// 箇条書きカード
+/// 箇条書きカード（強み・弱み）
 class _BulletCard extends StatelessWidget {
   const _BulletCard({
     required this.title,
@@ -663,7 +920,7 @@ class _BulletCard extends StatelessWidget {
   }
 }
 
-/// アドバイスカード
+/// アドバイスカード（1点アドバイス）
 class _AdviceCard extends StatelessWidget {
   const _AdviceCard({required this.accent, required this.tips});
   final Color accent;
@@ -685,49 +942,65 @@ class _AdviceCard extends StatelessWidget {
         children: [
           const Text('アドバイス', style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          ...tips.map(
-            (t) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.tips_and_updates_rounded, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(t)),
-                ],
+          ...tips
+              .where((t) => t.trim().isNotEmpty)
+              .map(
+                (t) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.tips_and_updates_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(t)),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-/// 相性表示
-class _CompatibilityRow extends StatelessWidget {
-  const _CompatibilityRow({
-    required this.good,
-    required this.caution,
-    required this.accent,
-  });
-  final List<String> good;
-  final List<String> caution;
-  final Color accent;
+/// タグ/チップ群
+class _ChipWrap extends StatelessWidget {
+  const _ChipWrap({required this.items, required this.color});
+  final List<String> items;
+  final Color color;
 
-  Widget _pill(String t, {required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.6)),
-      ),
-      child: Text(
-        t,
-        style: TextStyle(fontWeight: FontWeight.w800, color: color),
-      ),
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: items.map((t) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.6)),
+          ),
+          child: Text(
+            t,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+        );
+      }).toList(),
     );
   }
+}
+
+/// 相性の理由付きリスト
+class _ReasonList extends StatelessWidget {
+  const _ReasonList({
+    required this.title,
+    required this.items,
+    required this.pillColor,
+  });
+  final String title;
+  final List<Map<String, dynamic>> items;
+  final Color pillColor;
 
   @override
   Widget build(BuildContext context) {
@@ -735,149 +1008,50 @@ class _CompatibilityRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('ベスト', style: TextStyle(color: cs.onSurface.withOpacity(0.7))),
+        Text(title, style: TextStyle(color: cs.onSurface.withOpacity(0.7))),
         const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: good.map((t) => _pill(t, color: accent)).toList(),
-        ),
-        const SizedBox(height: 12),
-        Text('注意', style: TextStyle(color: cs.onSurface.withOpacity(0.7))),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: caution.map((t) => _pill(t, color: cs.error)).toList(),
+        Column(
+          children: items.map((m) {
+            final type = (m['type'] ?? '').toString();
+            final reason = (m['reason'] ?? '').toString();
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withOpacity(0.6)),
+                color: cs.surfaceVariant.withOpacity(0.35),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // タイプピル
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: pillColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(0.6)),
+                    ),
+                    child: Text(
+                      type,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: pillColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(reason)),
+                ],
+              ),
+            );
+          }).toList(),
         ),
       ],
-    );
-  }
-}
-
-/// SNSシェア導線
-class _ShareRow extends StatelessWidget {
-  const _ShareRow({
-    required this.onShareX,
-    required this.onShareIG,
-    required this.onShareLINE,
-  });
-
-  final VoidCallback onShareX;
-  final VoidCallback onShareIG;
-  final VoidCallback onShareLINE;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ShareButton(
-            label: 'Xでシェア',
-            circleChild: const Text(
-              'X',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            circleColor: Colors.black,
-            onTap: onShareX,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _ShareButton(
-            label: 'ストーリーズ',
-            circleChild: const Icon(
-              Icons.camera_alt_rounded,
-              color: Colors.white,
-            ),
-            circleColor: const Color(0xFFFD1D1D), // IG風（赤寄り）
-            gradient: const [
-              Color(0xFF405DE6),
-              Color(0xFF5851DB),
-              Color(0xFF833AB4),
-              Color(0xFFC13584),
-              Color(0xFFE1306C),
-              Color(0xFFFD1D1D),
-              Color(0xFFF56040),
-              Color(0xFFFCAF45),
-              Color(0xFFFFDC80),
-            ],
-            onTap: onShareIG,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _ShareButton(
-            label: 'LINEで送る',
-            circleChild: const Text(
-              'LINE',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-              ),
-            ),
-            circleColor: const Color(0xFF06C755),
-            onTap: onShareLINE,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ShareButton extends StatelessWidget {
-  const _ShareButton({
-    required this.label,
-    required this.circleChild,
-    required this.circleColor,
-    this.gradient,
-    required this.onTap,
-  });
-
-  final String label;
-  final Widget circleChild;
-  final Color circleColor;
-  final List<Color>? gradient;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final border = Border.all(color: Colors.white.withOpacity(0.6));
-    final bkg = gradient == null
-        ? BoxDecoration(
-            color: circleColor,
-            shape: BoxShape.circle,
-            border: border,
-          )
-        : BoxDecoration(
-            gradient: LinearGradient(colors: gradient!),
-            shape: BoxShape.circle,
-            border: border,
-          );
-
-    return FilledButton(
-      onPressed: onTap,
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: bkg,
-            alignment: Alignment.center,
-            child: circleChild,
-          ),
-          const SizedBox(width: 10),
-          Text(label),
-        ],
-      ),
     );
   }
 }
