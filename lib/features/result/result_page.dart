@@ -24,6 +24,14 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
 });
 
+/// ============ カラーパレット（HTMLに寄せたトーン） ============
+const kGreenMain = Color(0xFF127158);
+const kGreenLight = Color(0xFF46C5A1);
+const kGreenPale = Color(0xFF92D8C5);
+const kPurpleMain = Color(0xFF7D4F9F);
+const kPurpleLight = Color(0xFFA572AF);
+const kGrayBg = Color(0xFFF3F4F6);
+
 class ResultPage extends ConsumerStatefulWidget {
   const ResultPage({super.key});
   @override
@@ -205,14 +213,11 @@ class _ResultPageState extends ConsumerState<ResultPage> {
   @override
   Widget build(BuildContext context) {
     final res = ref.watch(analyzeResultProvider);
-    final cs = Theme.of(context).colorScheme;
-
     final isBusy = loading || _dbLoading;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('診断結果')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      backgroundColor: kGrayBg,
+      body: SafeArea(
         child: isBusy
             ? const Center(child: CircularProgressIndicator())
             : (error ?? _dbError) != null
@@ -221,76 +226,13 @@ class _ResultPageState extends ConsumerState<ResultPage> {
             ? const Center(child: Text('結果がありません'))
             : (_typeDb?[res.type] == null)
             ? Center(child: Text('結果データに ${res.type} の定義が見つかりませんでした'))
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final content = SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight - 16,
-                      ),
-                      child: Column(
-                        children: [
-                          // ===== 共有用キャプチャ領域 =====
-                          RepaintBoundary(
-                            key: _captureKey,
-                            child: _ResultCard(
-                              typeCode: res.type,
-                              data: _typeDb![res.type] as Map<String, dynamic>,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // ===== SNSシェア導線 =====
-                          Row(
-                            children: [
-                              if (!kIsWeb)
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    onPressed: () =>
-                                        _shareCapture(targetLabel: 'LINE'),
-                                    icon: const Icon(Icons.send),
-                                    label: const Text('結果を共有する'),
-                                  ),
-                                ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // 再診断
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  Navigator.popUntil(context, (r) => r.isFirst),
-                              child: const Text('もう一度診断する'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-
-                  // カウントダウンやスパークはStackでオーバーレイ
-                  return Stack(
-                    children: [
-                      // 本体（カウントダウン中はわずかに縮小・暗転）
-                      AnimatedOpacity(
-                        duration: const Duration(milliseconds: 250),
-                        opacity: _countdown > 0 ? 0.6 : 1,
-                        child: AnimatedScale(
-                          scale: _countdown > 0 ? 0.98 : 1.0,
-                          duration: const Duration(milliseconds: 250),
-                          child: content,
-                        ),
-                      ),
-
-                      if (_countdown > 0) _CountdownOverlay(number: _countdown),
-
-                      if (_blast) const _SparkOverlay(),
-                    ],
-                  );
-                },
+            : _ResultView(
+                typeCode: res.type,
+                data: _typeDb![res.type] as Map<String, dynamic>,
+                captureKey: _captureKey,
+                onShare: () => _shareCapture(targetLabel: 'ALL'),
+                countdown: _countdown,
+                blast: _blast,
               ),
       ),
     );
@@ -298,43 +240,40 @@ class _ResultPageState extends ConsumerState<ResultPage> {
 }
 
 /// =====================================================
-/// 結果カード（JSON 準拠UI）
+/// 画面全体（HTMLデザインに寄せた構成）
 /// =====================================================
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.typeCode, required this.data});
+class _ResultView extends StatelessWidget {
+  const _ResultView({
+    required this.typeCode,
+    required this.data,
+    required this.captureKey,
+    required this.onShare,
+    required this.countdown,
+    required this.blast,
+  });
+
   final String typeCode;
   final Map<String, dynamic> data;
+  final GlobalKey captureKey;
+  final VoidCallback onShare;
+  final int countdown;
+  final bool blast;
 
-  Color _accentFromType(ColorScheme cs, String t) {
+  Color _accentFromFirstLetter(String t) {
+    // S系=グリーン, K系=パープル
     final ch = (t.isNotEmpty ? t[0] : 'S').toUpperCase();
-    switch (ch) {
-      case 'K':
-        return cs.secondary;
-      case 'S':
-        return cs.primary;
-      default:
-        return cs.tertiary;
-    }
+    return ch == 'K' ? kPurpleMain : kGreenMain;
   }
 
-  double _toPct(dynamic v) {
-    if (v == null) return 0.0;
-    double d;
-    if (v is int) {
-      d = v.toDouble();
-    } else if (v is double) {
-      d = v;
-    } else {
-      d = double.tryParse(v.toString()) ?? 0.0;
-    }
-    // 0〜100 を想定し、ガード
-    return (d / 100.0).clamp(0.0, 1.0);
+  Color _accentLightFromFirstLetter(String t) {
+    final ch = (t.isNotEmpty ? t[0] : 'S').toUpperCase();
+    return ch == 'K' ? kPurpleLight : kGreenLight;
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final accent = _accentFromType(cs, typeCode);
+    final accent = _accentFromFirstLetter(typeCode);
+    final accentLight = _accentLightFromFirstLetter(typeCode);
 
     final name = (data['name'] ?? '').toString();
     final catchCopy = (data['catch_copy'] ?? '').toString();
@@ -351,6 +290,12 @@ class _ResultCard extends StatelessWidget {
     final advice = (data['one_point_advice'] ?? '').toString();
 
     final chart = (data['chart'] as Map<String, dynamic>? ?? {});
+    double _toPct(dynamic v) {
+      if (v == null) return 0.0;
+      final d = v is num ? v.toDouble() : double.tryParse('$v') ?? 0.0;
+      return (d / 100.0).clamp(0.0, 1.0);
+    }
+
     final sk = _toPct(chart['SK']);
     final mp = _toPct(chart['MP']);
     final hl = _toPct(chart['HL']);
@@ -378,288 +323,434 @@ class _ResultCard extends StatelessWidget {
         .cast<Map<String, dynamic>>()
         .toList();
 
-    return Card(
-      elevation: 0,
-      color: cs.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final double imageSide = math.min(c.maxWidth, 520);
+    final headerHeight = math.max(
+      620.0,
+      MediaQuery.of(context).size.height * 0.55,
+    );
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // タイトル帯（タイプ4文字バッジ + JSONタイトル/キャッチコピー）
-                _TypeBadge(
-                  code: typeCode,
-                  title: name,
-                  subtitle: catchCopy,
-                  accent: accent,
+    final content = CustomScrollView(
+      slivers: [
+        // ====== ヒーローヘッダー（キャプチャ対象） ======
+        SliverToBoxAdapter(
+          child: RepaintBoundary(
+            key: captureKey,
+            child: Container(
+              height: headerHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(24),
                 ),
-
-                const SizedBox(height: 10),
-                if (catchPhrase.isNotEmpty)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.6),
-                        ),
-                      ),
-                      child: Text(
-                        catchPhrase,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: accent,
-                        ),
-                      ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 20,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 12),
+                  Text(
+                    'あなたの診断結果は...',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 12,
                     ),
                   ),
-
-                const SizedBox(height: 12),
-
-                // メイン画像
-                Center(
-                  child: SizedBox(
-                    width: imageSide,
+                  const SizedBox(height: 16),
+                  // 円形アイコン
+                  // 画像（任意・ポスター用）
+                  _CardSurface(
+                    padding: const EdgeInsets.all(8),
                     child: AspectRatio(
                       aspectRatio: 1,
                       child: _ResultImage(type: typeCode),
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  // タイトル群
+                  Text(
+                    catchCopy,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    name,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 28,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (accent == kPurpleMain ? kPurpleLight : kGreenPale)
+                          .withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      typeCode,
+                      style: TextStyle(
+                        color: accent,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // ====== 本文 ======
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // キャッチーな一言
+                if (catchPhrase.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          (accent == kPurpleMain ? kPurpleLight : kPurpleLight)
+                              .withOpacity(0.10),
+                      borderRadius: const BorderRadius.horizontal(
+                        right: Radius.circular(14),
+                      ),
+                      border: Border(
+                        left: BorderSide(color: kPurpleLight, width: 4),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '“$catchPhrase”',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: kPurpleMain,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 14),
+
+                // シェアボタン
+                FilledButton(
+                  onPressed: onShare,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kPurpleMain,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.share, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text(
+                        '結果をシェアする',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 24),
 
-                // 概要（manual）
-                _SectionHeader(title: '概要'),
-                const SizedBox(height: 6),
-                Text(manual),
-
-                const SizedBox(height: 16),
-
-                // 4軸チャート（バー） JSONの chart をそのまま表示 + ラベル（ベタ書き）
-                _SectionHeader(title: 'タイプチャート'),
-                const SizedBox(height: 8),
-
-                // S-K
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'S = 親しみやすさ',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        'K = クールな安定感',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                // あなたのトリセツ
+                _SectionTitle(
+                  title: 'あなたのトリセツ',
+                  barColor: kGreenLight,
+                  textColor: kGreenMain,
                 ),
-                const SizedBox(height: 6),
-                _DualBar(label: 'S↔K', valueLeft: sk),
-
-                const SizedBox(height: 8),
-
-                // M-P
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'M = 瞬発力・ノリ',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        'P = 丁寧さ・配慮',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                _DualBar(label: 'M↔P', valueLeft: mp),
-
-                const SizedBox(height: 8),
-
-                // H-L
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'H = 存在感・メリハリ',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        'L = 落ち着き',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                _DualBar(label: 'H↔L', valueLeft: hl),
-
-                const SizedBox(height: 8),
-
-                // A-C
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'A = 行動力',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        'C = 計画性',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                _DualBar(label: 'A↔C', valueLeft: ac),
-
-                const SizedBox(height: 16),
-
-                // 強み・弱み（JSON 準拠）
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BulletCard(
-                        title: '強み',
-                        accent: accent,
-                        bullets: strongPoints,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BulletCard(
-                        title: '弱み',
-                        accent: cs.error,
-                        bullets: weekPoints,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 10),
+                _CardSurface(
+                  child: Text(
+                    manual,
+                    style: TextStyle(color: Colors.grey.shade800, height: 1.6),
+                  ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
-                // アドバイス（JSON 準拠）
-                _AdviceCard(accent: accent, tips: [advice]),
+                // 顔×性格チャート
+                _SectionTitle(
+                  title: '顔×性格チャート',
+                  barColor: kGreenLight,
+                  textColor: kGreenMain,
+                ),
+                const SizedBox(height: 10),
+                _CardSurface(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                  child: Column(
+                    children: [
+                      _DotBar(
+                        leftLabel: '社交的 (S)',
+                        rightLabel: '内省的 (K)',
+                        value: sk,
+                        trackColor: kGreenPale,
+                        dotColor: kPurpleMain,
+                      ),
+                      const SizedBox(height: 18),
+                      _DotBar(
+                        leftLabel: '感覚派 (M)',
+                        rightLabel: '直感派 (P)',
+                        value: mp,
+                        trackColor: kGreenPale,
+                        dotColor: kPurpleMain,
+                      ),
+                      const SizedBox(height: 18),
+                      _DotBar(
+                        leftLabel: '情熱的 (H)',
+                        rightLabel: '冷静沈着 (L)',
+                        value: hl,
+                        trackColor: kGreenPale,
+                        dotColor: kPurpleMain,
+                      ),
+                      const SizedBox(height: 18),
+                      _DotBar(
+                        leftLabel: '協調性 (A)',
+                        rightLabel: '計画性 (C)',
+                        value: ac,
+                        trackColor: kGreenPale,
+                        dotColor: kPurpleMain,
+                      ),
+                    ],
+                  ),
+                ),
 
-                const SizedBox(height: 16),
-
-                // タイプあるある
+                // あるある
                 if (typeThings.isNotEmpty) ...[
-                  _SectionHeader(title: 'タイプあるある'),
-                  const SizedBox(height: 8),
-                  _ChipWrap(items: typeThings, color: cs.primary),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
+                  _SectionTitle(
+                    title: '$name あるある',
+                    barColor: kGreenLight,
+                    textColor: kGreenMain,
+                  ),
+                  const SizedBox(height: 10),
+                  Column(
+                    children: List.generate(typeThings.length, (i) {
+                      final emojis = ['🎉', '😂', '🏃', '✨', '💬', '🧭'];
+                      final emoji = emojis[i % emojis.length];
+                      return _CardSurface(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Text(emoji, style: const TextStyle(fontSize: 20)),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(typeThings[i])),
+                          ],
+                        ),
+                      );
+                    }),
+                  ),
                 ],
 
-                // 向いてる職業・役割
+                // 向いている職業・役割
                 if (careers.isNotEmpty) ...[
-                  _SectionHeader(title: '向いてる職業・役割'),
-                  const SizedBox(height: 8),
-                  _ChipWrap(items: careers, color: cs.secondary),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
+                  _SectionTitle(
+                    title: '向いている職業・役割',
+                    barColor: kGreenLight,
+                    textColor: kGreenMain,
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: careers
+                        .map(
+                          (t) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kGreenPale,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              t,
+                              style: const TextStyle(
+                                color: kGreenMain,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ],
 
-                // 相性（良い／注意）理由つき
-                _SectionHeader(title: '相性'),
-                const SizedBox(height: 8),
-                if (compatible.isNotEmpty)
-                  _ReasonList(
-                    title: 'ベスト',
-                    items: compatible,
-                    pillColor: accent,
-                  ),
-                if (incompatible.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _ReasonList(
-                    title: '注意',
-                    items: incompatible,
-                    pillColor: cs.error,
+                // 強み・弱み
+                if (strongPoints.isNotEmpty || weekPoints.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _CardSurface(
+                          padding: const EdgeInsets.all(14),
+                          child: _BulletList(
+                            title: '強み',
+                            bullets: strongPoints,
+                            titleColor: accent,
+                            icon: Icons.check_circle_rounded,
+                            iconColor: accent,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _CardSurface(
+                          padding: const EdgeInsets.all(14),
+                          child: _BulletList(
+                            title: '弱み',
+                            bullets: weekPoints,
+                            titleColor: Colors.red.shade700,
+                            icon: Icons.error_rounded,
+                            iconColor: Colors.red.shade600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
 
-                const SizedBox(height: 16),
+                // アドバイス
+                if (advice.trim().isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  _SectionTitle(
+                    title: 'アドバイス',
+                    barColor: kGreenLight,
+                    textColor: kGreenMain,
+                  ),
+                  const SizedBox(height: 10),
+                  _CardSurface(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.tips_and_updates_rounded,
+                          color: kPurpleMain,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            advice,
+                            style: const TextStyle(height: 1.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // 相性診断
+                if (compatible.isNotEmpty || incompatible.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  _SectionTitle(
+                    title: '相性診断',
+                    barColor: kGreenLight,
+                    textColor: kGreenMain,
+                  ),
+                  const SizedBox(height: 10),
+                  if (compatible.isNotEmpty) ...[
+                    Text(
+                      'ベスト',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      children: compatible.map((m) {
+                        return _ReasonTile(
+                          type: (m['type'] ?? '').toString(),
+                          reason: (m['reason'] ?? '').toString(),
+                          pillColor: accentLight,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (incompatible.isNotEmpty) ...[
+                    Text(
+                      '注意',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      children: incompatible.map((m) {
+                        return _ReasonTile(
+                          type: (m['type'] ?? '').toString(),
+                          reason: (m['reason'] ?? '').toString(),
+                          pillColor: Colors.red.shade300,
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
 
                 // 似ている有名人
                 if (celebrities.isNotEmpty) ...[
-                  _SectionHeader(title: '似ている有名人'),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 24),
+                  _SectionTitle(
+                    title: '似ている有名人',
+                    barColor: kGreenLight,
+                    textColor: kGreenMain,
+                  ),
+                  const SizedBox(height: 10),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: celebrities.map((m) {
-                      final name = (m['name'] ?? '').toString();
-                      final desc = (m['description'] ?? '').toString();
-                      return Container(
+                      final n = (m['name'] ?? '').toString();
+                      final d = (m['description'] ?? '').toString();
+                      return _CardSurface(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceVariant.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.6),
-                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -667,18 +758,16 @@ class _ResultCard extends StatelessWidget {
                             const Icon(Icons.person, size: 16),
                             const SizedBox(width: 6),
                             Text(
-                              name,
+                              n,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            if (desc.isNotEmpty) ...[
+                            if (d.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               Text(
-                                '($desc)',
-                                style: TextStyle(
-                                  color: cs.onSurface.withOpacity(0.65),
-                                ),
+                                '($d)',
+                                style: TextStyle(color: Colors.grey.shade700),
                               ),
                             ],
                           ],
@@ -687,10 +776,289 @@ class _ResultCard extends StatelessWidget {
                     }).toList(),
                   ),
                 ],
+
+                const SizedBox(height: 28),
+
+                // 再診断
+                OutlinedButton(
+                  onPressed: () =>
+                      Navigator.of(context).popUntil((r) => r.isFirst),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: accent,
+                    side: BorderSide(color: accent),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'もう一度診断する',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
               ],
-            );
-          },
+            ),
+          ),
         ),
+      ],
+    );
+
+    // カウントダウン・スパーク演出（オーバーレイ）
+    return Stack(
+      children: [
+        content,
+        if (countdown > 0) _CountdownOverlay(number: countdown),
+        if (blast) const _SparkOverlay(),
+      ],
+    );
+  }
+}
+
+/// タイトル（左にカラーバー）
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({
+    required this.title,
+    required this.barColor,
+    required this.textColor,
+  });
+  final String title;
+  final Color barColor;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(width: 4, height: 22, color: barColor),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            color: textColor,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// カード風サーフェス
+class _CardSurface extends StatelessWidget {
+  const _CardSurface({required this.child, this.padding, this.margin});
+
+  final Widget child;
+  final EdgeInsets? padding;
+  final EdgeInsets? margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+/// ドットで位置を示すバー（HTMLのチャート風）
+class _DotBar extends StatelessWidget {
+  const _DotBar({
+    required this.leftLabel,
+    required this.rightLabel,
+    required this.value,
+    required this.trackColor,
+    required this.dotColor,
+  });
+
+  final String leftLabel;
+  final String rightLabel;
+
+  /// 0.0(左) ~ 1.0(右)
+  final double value;
+  final Color trackColor;
+  final Color dotColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // ラベル行
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                leftLabel,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.grey.shade700,
+                  fontSize: 12,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                rightLabel,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.grey.shade700,
+                  fontSize: 12,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // トラック + ドット
+        SizedBox(
+          height: 22,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final w = c.maxWidth;
+              final pos = (w - 20) * value; // ドット直径=20を考慮
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: Container(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: trackColor,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: pos.clamp(0.0, math.max(0.0, w - 20)),
+                    top: 1,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: dotColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x33000000),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 箇条書き（強み/弱み）
+class _BulletList extends StatelessWidget {
+  const _BulletList({
+    required this.title,
+    required this.bullets,
+    required this.titleColor,
+    required this.icon,
+    required this.iconColor,
+  });
+
+  final String title;
+  final List<String> bullets;
+  final Color titleColor;
+  final IconData icon;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(color: titleColor, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        ...bullets.map(
+          (b) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 16, color: iconColor),
+                const SizedBox(width: 8),
+                Expanded(child: Text(b)),
+              ],
+            ),
+          ),
+        ),
+        if (bullets.isEmpty)
+          Text('—', style: TextStyle(color: Colors.grey.shade600)),
+      ],
+    );
+  }
+}
+
+/// 相性タイル（タイプピル + 理由）
+class _ReasonTile extends StatelessWidget {
+  const _ReasonTile({
+    required this.type,
+    required this.reason,
+    required this.pillColor,
+  });
+
+  final String type;
+  final String reason;
+  final Color pillColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardSurface(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: pillColor.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.6)),
+            ),
+            child: Text(
+              type,
+              style: TextStyle(fontWeight: FontWeight.w800, color: pillColor),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(reason)),
+        ],
       ),
     );
   }
@@ -707,355 +1075,6 @@ class _ResultImage extends StatelessWidget {
   }
 }
 
-/// タイプ4文字の目立つバッジ（JSONの name/catch_copy を表示）
-class _TypeBadge extends StatelessWidget {
-  const _TypeBadge({
-    required this.code,
-    required this.title,
-    required this.subtitle,
-    required this.accent,
-  });
-  final String code;
-  final String title;
-  final String subtitle;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: const Alignment(-1, -1),
-          end: const Alignment(1, 1),
-          colors: [accent.withOpacity(0.15), accent.withOpacity(0.05)],
-        ),
-        border: Border.all(color: Colors.white.withOpacity(0.6)),
-      ),
-      child: Row(
-        children: [
-          // 4文字を大きく
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: accent,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withOpacity(0.28),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Text(
-              code.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const Icon(Icons.auto_awesome, size: 20),
-        ],
-      ),
-    );
-  }
-}
-
-/// セクション見出し
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-  final String title;
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: cs.primary.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(Icons.stars_rounded, color: cs.primary, size: 18),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-        ),
-      ],
-    );
-  }
-}
-
-/// 4軸のデュアルバー（左側比率を 0〜1 で受け取る）
-class _DualBar extends StatelessWidget {
-  const _DualBar({required this.label, required this.valueLeft});
-  final String label; // "S↔K" など
-  final double valueLeft; // 左側（0〜1）
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: cs.onSurface.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            height: 10,
-            child: Stack(
-              children: [
-                // 背景
-                Container(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceVariant.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                // 左
-                FractionallySizedBox(
-                  widthFactor: valueLeft.clamp(0.0, 1.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 箇条書きカード（強み・弱み）
-class _BulletCard extends StatelessWidget {
-  const _BulletCard({
-    required this.title,
-    required this.accent,
-    required this.bullets,
-  });
-  final String title;
-  final Color accent;
-  final List<String> bullets;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        gradient: LinearGradient(
-          colors: [accent.withOpacity(0.08), accent.withOpacity(0.04)],
-        ),
-        border: Border.all(color: Colors.white.withOpacity(0.6)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          ...bullets.map(
-            (b) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 16,
-                    color: title == '強み' ? accent : cs.error,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text(b)),
-                ],
-              ),
-            ),
-          ),
-          if (bullets.isEmpty)
-            Text('—', style: TextStyle(color: cs.onSurface.withOpacity(0.6))),
-        ],
-      ),
-    );
-  }
-}
-
-/// アドバイスカード（1点アドバイス）
-class _AdviceCard extends StatelessWidget {
-  const _AdviceCard({required this.accent, required this.tips});
-  final Color accent;
-  final List<String> tips;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.6)),
-        gradient: LinearGradient(
-          colors: [accent.withOpacity(0.10), accent.withOpacity(0.05)],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('アドバイス', style: TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          ...tips
-              .where((t) => t.trim().isNotEmpty)
-              .map(
-                (t) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.tips_and_updates_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(t)),
-                    ],
-                  ),
-                ),
-              ),
-        ],
-      ),
-    );
-  }
-}
-
-/// タグ/チップ群
-class _ChipWrap extends StatelessWidget {
-  const _ChipWrap({required this.items, required this.color});
-  final List<String> items;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: items.map((t) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.6)),
-          ),
-          child: Text(
-            t,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-/// 相性の理由付きリスト
-class _ReasonList extends StatelessWidget {
-  const _ReasonList({
-    required this.title,
-    required this.items,
-    required this.pillColor,
-  });
-  final String title;
-  final List<Map<String, dynamic>> items;
-  final Color pillColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: TextStyle(color: cs.onSurface.withOpacity(0.7))),
-        const SizedBox(height: 6),
-        Column(
-          children: items.map((m) {
-            final type = (m['type'] ?? '').toString();
-            final reason = (m['reason'] ?? '').toString();
-            return Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withOpacity(0.6)),
-                color: cs.surfaceVariant.withOpacity(0.35),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // タイプピル
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: pillColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(0.6)),
-                    ),
-                    child: Text(
-                      type,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: pillColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(reason)),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
-
 /// カウントダウンオーバーレイ
 class _CountdownOverlay extends StatelessWidget {
   const _CountdownOverlay({required this.number});
@@ -1063,21 +1082,11 @@ class _CountdownOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final text = number > 0 ? '$number' : '決定！';
     return Positioned.fill(
       child: IgnorePointer(
         child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                cs.surface.withOpacity(0.85),
-                cs.surface.withOpacity(0.75),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
+          color: Colors.black.withOpacity(0.15),
           child: Center(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
@@ -1088,6 +1097,14 @@ class _CountdownOverlay extends StatelessWidget {
                   fontSize: 56,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 4,
+                  color: Colors.white,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black26,
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1104,14 +1121,15 @@ class _SparkOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
     final stars = List.generate(
       16,
       (i) => Positioned(
-        left: (i * 37) % MediaQuery.of(context).size.width,
-        top: (i * 53) % (MediaQuery.of(context).size.height * 0.4) + 60,
+        left: (i * 37) % size.width,
+        top: (i * 53) % (size.height * 0.4) + 60,
         child: Opacity(
           opacity: 0.85 - (i % 5) * 0.12,
-          child: const Icon(Icons.auto_awesome, size: 16),
+          child: const Icon(Icons.auto_awesome, size: 16, color: Colors.white),
         ),
       ),
     );
