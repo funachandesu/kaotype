@@ -155,7 +155,7 @@ class _ResultPageState extends ConsumerState<ResultPage> {
 
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png', name: 'kaotype_result.png')],
-        text: '私のカオタイプ診断結果 #カオタイプ16\nhttps://google.com で診断する！',
+        text: '私のカオタイプ診断結果 #カオタイプ16\nhttps://kao-type.com で診断する！',
         subject: 'カオタイプ診断 結果',
       );
     } catch (e) {
