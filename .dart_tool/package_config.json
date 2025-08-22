@@ -2,6 +2,12 @@
   "configVersion": 2,
   "packages": [
     {
+      "name": "app_tracking_transparency",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/app_tracking_transparency-2.0.6+1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "archive",
       "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/archive-4.0.7",
       "packageUri": "lib/",

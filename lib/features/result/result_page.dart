@@ -323,10 +323,22 @@ class _ResultView extends StatelessWidget {
         .cast<Map<String, dynamic>>()
         .toList();
 
-    final headerHeight = math.max(
-      620.0,
-      MediaQuery.of(context).size.height * 0.55,
-    );
+    final mq = MediaQuery.of(context);
+    final size = mq.size;
+    final shortest = size.shortestSide;
+
+    // “タブレット”判定（iPad想定）
+    final isTablet = shortest >= 600;
+
+    // 画像の最大サイズを制限（iPadは少し大きめまで許容）
+    final heroImageMax = isTablet ? 360.0 : 300.0;
+
+    // iPadはヘッダーを広めに確保（中身が多い前提）
+    final headerHeight =
+        (isTablet
+                ? math.min(MediaQuery.of(context).size.height * 0.95, 980)
+                : math.max(620.0, MediaQuery.of(context).size.height * 0.55))
+            .toDouble();
 
     final content = CustomScrollView(
       slivers: [
@@ -366,9 +378,15 @@ class _ResultView extends StatelessWidget {
                   // 画像（任意・ポスター用）
                   _CardSurface(
                     padding: const EdgeInsets.all(8),
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: _ResultImage(type: typeCode),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: heroImageMax,
+                        maxHeight: heroImageMax,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: _ResultImage(type: typeCode),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),

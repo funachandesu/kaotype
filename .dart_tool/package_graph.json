@@ -7,6 +7,7 @@
       "name": "facetype",
       "version": "1.0.0+1",
       "dependencies": [
+        "app_tracking_transparency",
         "cupertino_icons",
         "dio",
         "flutter",
@@ -772,6 +773,13 @@
       "name": "sprintf",
       "version": "7.0.0",
       "dependencies": []
+    },
+    {
+      "name": "app_tracking_transparency",
+      "version": "2.0.6+1",
+      "dependencies": [
+        "flutter"
+      ]
     }
   ],
   "configVersion": 1
