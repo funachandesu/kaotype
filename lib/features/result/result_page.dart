@@ -60,7 +60,6 @@ class _ResultPageState extends ConsumerState<ResultPage> {
     });
     try {
       // 同ディレクトリに配置したJSONを読み込む
-      // pubspec.yaml の assets にこのパスを追加しておくこと
       final jsonStr = await rootBundle.loadString(
         'lib/features/result/result_definitions.json',
       );
@@ -478,34 +477,35 @@ class _ResultView extends StatelessWidget {
 
                 const SizedBox(height: 14),
 
-                // シェアボタン
-                FilledButton(
-                  onPressed: onShare,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: kPurpleMain,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 2,
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.share, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text(
-                        '結果をシェアする',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
+                // シェアボタン（iPadでは非表示）
+                if (!isTablet)
+                  FilledButton(
+                    onPressed: onShare,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kPurpleMain,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                    ],
+                      elevation: 2,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.share, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          '結果をシェアする',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 24),
+                if (!isTablet) const SizedBox(height: 24),
 
                 // あなたのトリセツ
                 _SectionTitle(
