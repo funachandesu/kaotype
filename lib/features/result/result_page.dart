@@ -292,7 +292,7 @@ class _ResultView extends StatelessWidget {
     double _toPct(dynamic v) {
       if (v == null) return 0.0;
       final d = v is num ? v.toDouble() : double.tryParse('$v') ?? 0.0;
-      return (d / 100.0).clamp(0.0, 1.0);
+      return (d / 50.0).clamp(0.0, 1.0);
     }
 
     final sk = _toPct(chart['SK']);
