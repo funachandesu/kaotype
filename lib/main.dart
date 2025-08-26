@@ -2,8 +2,10 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:app_tracking_transparency/app_tracking_transparency.dart'; // ← 追加
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'core/app_routes.dart';
 import 'core/app_theme.dart';
 import 'features/start/start_page.dart';
@@ -11,8 +13,13 @@ import 'features/upload/upload_page.dart';
 import 'features/questions/questions_page.dart';
 import 'features/result/result_page.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized(); // 念のため
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // --- Firebase 初期化 ---
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // ---------------------
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -33,17 +40,12 @@ class _MyAppState extends State<MyApp> {
   Future<void> _maybeRequestATTOnFirstLaunch() async {
     if (!Platform.isIOS) return;
 
-    // 現在の許可状態を取得
     final status = await AppTrackingTransparency.trackingAuthorizationStatus;
-
-    // まだ未決定なら、初回起動時にダイアログを表示
     if (status == TrackingStatus.notDetermined) {
-      // 画面初期描画が完了してから少し待ってリクエスト（推奨パターン）
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await Future.delayed(const Duration(milliseconds: 400));
         final result =
             await AppTrackingTransparency.requestTrackingAuthorization();
-        // 必要なら結果で分岐
         debugPrint('ATT status: $result');
       });
     }
@@ -63,7 +65,7 @@ class _MyAppState extends State<MyApp> {
       },
       theme: buildKaotypeTheme(Brightness.light),
       darkTheme: buildKaotypeTheme(Brightness.dark),
-      themeMode: ThemeMode.light, // 必要なら ThemeMode.system に変更可
+      themeMode: ThemeMode.light,
     );
   }
 }

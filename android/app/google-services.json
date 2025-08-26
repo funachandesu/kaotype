@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "352657115864",
+    "project_id": "kao-type",
+    "storage_bucket": "kao-type.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352657115864:android:a20c69d609463e18e4e5ad",
+        "android_client_info": {
+          "package_name": "com.example.facetype"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdAk1p-7CC_j_3rcFOh9Uaj1XC0WKr7PY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

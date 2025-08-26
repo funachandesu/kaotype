@@ -2,6 +2,12 @@
   "configVersion": 2,
   "packages": [
     {
+      "name": "_flutterfire_internals",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/_flutterfire_internals-1.3.60",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
       "name": "app_tracking_transparency",
       "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/app_tracking_transparency-2.0.6+1",
       "packageUri": "lib/",
@@ -130,6 +136,42 @@
     {
       "name": "file_selector_windows",
       "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/file_selector_windows-0.9.3+4",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "firebase_analytics",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/firebase_analytics-12.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "firebase_analytics_platform_interface",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/firebase_analytics_platform_interface-5.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "firebase_analytics_web",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/firebase_analytics_web-0.6.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "firebase_core",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/firebase_core-4.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "firebase_core_platform_interface",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/firebase_core_platform_interface-6.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "firebase_core_web",
+      "rootUri": "file:///Users/yuta/.pub-cache/hosted/pub.dev/firebase_core_web-3.0.0",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
